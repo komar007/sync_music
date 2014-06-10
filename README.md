@@ -10,4 +10,4 @@ Tracking changes in files is not supported.
 
 ## Usage
 
-    ./sync source_dir dest_dir
+    ./sync.sh source_dir dest_dir
