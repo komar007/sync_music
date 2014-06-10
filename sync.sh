@@ -34,15 +34,18 @@ echo Updating directory structure...
 	xargs -0 mkdir -p \
 )
 
+$SCDIR/bpc/server "$tmp"/to_convert $threads $SCDIR/flac2ogg.sh > /dev/null 2>&1 &
+server_pid=$!
+
 echo -n > "$tmp"/to_copy
-echo -n > "$tmp"/to_convert
 cat "$tmp"/mp3_missing | while read file ; do
 	if [ -f "$SOURCE"/"$file" ]; then
 		echo "$file" >> "$tmp"/to_copy
 	else
-		echo "$file" >> "$tmp"/to_convert
+		$SCDIR/bpc/enqueue "$tmp"/to_convert "$SOURCE/${file%.ogg}.flac" "$DEST/$file"
 	fi
 done
+Nc=`wc -l < "$tmp"/to_convert`
 
 i=0
 N=`wc -l < "$tmp"/to_copy`
@@ -53,41 +56,31 @@ cat "$tmp"/to_copy | while read file ; do
 done
 echo -e '\r'Copying new mp3 and ogg files... done"           "
 
-i=0
-N=`wc -l < "$tmp"/to_convert`
-
-rm "$tmp"/to_convert.* -fr
-split -l $((($N+$threads-1)/$threads)) "$tmp"/to_convert "$tmp"/to_convert.
-
-# run workers
-rm -fr "$tmp"/stop
-for list in "$tmp"/to_convert.*; do
-	bash "$SCDIR"/worker.sh "$list" "$SOURCE" "$DEST" &
-done
-
 trap ctrl_c INT
 
 sleep 1
 
 function ctrl_c() {
-        echo killing workers...
-	touch "$tmp"/stop
-	echo waiting for workers to stop...
-	while [ ! -z "`find "$tmp"/ -name '*.p'`" ]; do
-		sleep 0.5
+	echo
+        echo killing worker server...
+	rm "$tmp"/to_convert
+	echo -n waiting for worker server to finish
+	while [ -n "$(ps -hp $server_pid)" ]; do
+		sleep 1 && echo -n .
 	done
+	echo
+	echo finished
+	rm -fr "$tmp"
 	exit
 }
 
 echo "Converting flac files..."
-while [ ! -z "`find $tmp/ -name '*.p'`" ]; do
+while [ -s "$tmp"/to_convert ]; do
 	echo -en '\r'
-	cat "$tmp"/*.p
-	echo -n '('`cat "$tmp"/*.p | sed -e 's/\/[0-9]\+/+/g' | sed -e 's/$/0\n/' | bc -l`/$N total')'
+	N=`wc -l < "$tmp"/to_convert`
+	echo -n $(($Nc-$N))/$Nc done
 	sleep 0.5
 done
+echo -e '\r'finished
 
-
-rm -fr "$tmp"
-echo
-echo Done\!
+ctrl_c

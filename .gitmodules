@@ -1,0 +1,3 @@
+[submodule "bpc"]
+	path = bpc
+	url = https://github.com/komar007/bash_producer_consumer.git
